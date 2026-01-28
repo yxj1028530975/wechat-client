@@ -1,0 +1,14 @@
+services:
+  wechat-api:
+    build: .
+    container_name: wechat-api
+    network_mode: host
+    volumes:
+      - wechat_images:/tmp/wechat_images
+      - ./main.py:/app/main.py
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+
+volumes:
+  wechat_images:
