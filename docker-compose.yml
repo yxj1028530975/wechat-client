@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      - WECHAT_API_URL=http://127.0.0.1:30001/api
+      - WECHAT_API_URL=http://192.168.31.109:30001/api
       - PUBLIC_BASE_URL=http://117.72.154.231:9000
 
 volumes:
