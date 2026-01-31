@@ -12,7 +12,7 @@ ENV PYTHONUNBUFFERED=1
 COPY requirements.txt .
 
 # 安装依赖
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 复制应用代码
 COPY main.py .
