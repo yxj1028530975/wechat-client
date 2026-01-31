@@ -161,9 +161,9 @@ def _parse_img_xml(xml_str: str) -> dict:
         return {}
 
 
-async def _cdn_download_img(file_id: str, aes_key: str, save_path: str, img_type: int = 2) -> bool:
+async def _cdn_download_img(file_id: str, aes_key: str, save_path: str, img_type: int = 2):
     if not file_id or not aes_key:
-        return False
+        return False, "missing file_id/aes_key"
     payload = {
         "type": 73,
         "img_type": img_type,
@@ -174,11 +174,12 @@ async def _cdn_download_img(file_id: str, aes_key: str, save_path: str, img_type
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(WECHAT_API_URL, json=payload)
-            print(f"CDN下载图片状态: {r.status_code}")
-            return r.status_code == 200
+            txt = r.text[:500]
+            print(f"CDN下载图片状态: {r.status_code} {txt}")
+            return r.status_code == 200, f"{r.status_code}:{txt}"
     except Exception as e:
         print(f"CDN下载图片失败: {e}")
-        return False
+        return False, str(e)
 
 
 async def process_message(body: dict, source: str = "api") -> dict:
@@ -346,13 +347,15 @@ async def rec_msg(data: dict):
         if file_id and aes_key and not data.get("path"):
             msg_id = data.get("msg_id") or uuid.uuid4().hex
             save_path = os.path.join(IMG_DOWNLOAD_DIR, f"{msg_id}.jpg")
-            ok = await _cdn_download_img(file_id, aes_key, save_path, img_type=2)
+            ok, detail = await _cdn_download_img(file_id, aes_key, save_path, img_type=2)
             if ok and os.path.exists(save_path):
                 data["path"] = save_path
                 data["cdn_file_id"] = file_id
                 if PUBLIC_BASE_URL:
                     data["url"] = f"{PUBLIC_BASE_URL.rstrip('/')}/files/{os.path.basename(save_path)}"
                 print(f"CDN图片已保存: {save_path}")
+            else:
+                data["cdn_error"] = detail
 
     forward_results = []
 
