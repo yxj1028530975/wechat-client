@@ -1,5 +1,6 @@
 ﻿from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import httpx
 import os
@@ -14,9 +15,13 @@ import xml.etree.ElementTree as ET
 
 app = FastAPI()
 
+WECHAT_API_URL = os.getenv("WECHAT_API_URL", "http://192.168.31.109:30001/api")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+
 # 图片下载目录
 IMG_DOWNLOAD_DIR = "/tmp/wechat_images"
 os.makedirs(IMG_DOWNLOAD_DIR, exist_ok=True)
+app.mount("/files", StaticFiles(directory=IMG_DOWNLOAD_DIR), name="files")
 
 
 # ==================== WebSocket 连接管理器 ====================
@@ -140,6 +145,42 @@ async def download_image(url: str) -> str:
 
 
 # ==================== 核心消息处理函数 ====================
+def _parse_img_xml(xml_str: str) -> dict:
+    try:
+        root = ET.fromstring(xml_str)
+        img = root.find("img")
+        if img is None:
+            return {}
+        return {
+            "aeskey": img.attrib.get("aeskey"),
+            "cdnthumburl": img.attrib.get("cdnthumburl"),
+            "cdnmidimgurl": img.attrib.get("cdnmidimgurl"),
+            "length": img.attrib.get("length"),
+        }
+    except Exception:
+        return {}
+
+
+async def _cdn_download_img(file_id: str, aes_key: str, save_path: str, img_type: int = 2) -> bool:
+    if not file_id or not aes_key:
+        return False
+    payload = {
+        "type": 73,
+        "img_type": img_type,
+        "file_id": file_id,
+        "aes_key": aes_key,
+        "save_path": save_path,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(WECHAT_API_URL, json=payload)
+            print(f"CDN下载图片状态: {r.status_code}")
+            return r.status_code == 200
+    except Exception as e:
+        print(f"CDN下载图片失败: {e}")
+        return False
+
+
 async def process_message(body: dict, source: str = "api") -> dict:
     print(f"[{source.upper()}] 接收到的消息:", body)
 
@@ -160,7 +201,7 @@ async def process_message(body: dict, source: str = "api") -> dict:
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post("http://192.168.31.109:30001/api", json=body)
+            response = await client.post(WECHAT_API_URL, json=body)
             print(f"转发响应状态: {response.status_code}")
             try:
                 response_data = response.json()
@@ -296,9 +337,25 @@ MSG_FORWARD_TARGETS = [
 async def rec_msg(data: dict):
     """处理接收到的消息并转发到配置的目标"""
     print(f"收到消息: {data}")
-    
+
+    # 尝试处理图片XML -> CDN下载得到本地路径
+    if data.get("msg_type") == 3 and isinstance(data.get("content"), str) and "<img" in data.get("content", ""):
+        meta = _parse_img_xml(data.get("content", ""))
+        file_id = meta.get("cdnmidimgurl") or meta.get("cdnthumburl")
+        aes_key = meta.get("aeskey")
+        if file_id and aes_key and not data.get("path"):
+            msg_id = data.get("msg_id") or uuid.uuid4().hex
+            save_path = os.path.join(IMG_DOWNLOAD_DIR, f"{msg_id}.jpg")
+            ok = await _cdn_download_img(file_id, aes_key, save_path, img_type=2)
+            if ok and os.path.exists(save_path):
+                data["path"] = save_path
+                data["cdn_file_id"] = file_id
+                if PUBLIC_BASE_URL:
+                    data["url"] = f"{PUBLIC_BASE_URL.rstrip('/')}/files/{os.path.basename(save_path)}"
+                print(f"CDN图片已保存: {save_path}")
+
     forward_results = []
-    
+
     # 先广播给 WebSocket 客户端
     if manager.get_connection_count() > 0:
         await manager.broadcast({
