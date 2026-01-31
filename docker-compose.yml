@@ -5,7 +5,7 @@ services:
     network_mode: host
     volumes:
       - ./main.py:/app/main.py
-      - /home/yxj/wechat_project/wechat_images:/data/wechat_images
+      - /mnt/d/wechat_save_file:/data/wechat_images
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
