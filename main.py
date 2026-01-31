@@ -162,6 +162,29 @@ def _parse_img_xml(xml_str: str) -> dict:
         return {}
 
 
+def _parse_file_xml(xml_str: str) -> dict:
+    try:
+        root = ET.fromstring(xml_str)
+        appmsg = root.find("appmsg")
+        if appmsg is None:
+            return {}
+        appattach = appmsg.find("appattach")
+        if appattach is None:
+            return {}
+        return {
+            "title": appmsg.findtext("title") or "",
+            "fileext": appattach.findtext("fileext") or "",
+            "totallen": appattach.findtext("totallen") or "",
+            "attachid": appattach.findtext("attachid") or "",
+            "cdnattachurl": appattach.findtext("cdnattachurl") or "",
+            "aeskey": appattach.findtext("aeskey") or "",
+            "md5": appmsg.findtext("md5") or "",
+            "overwrite_newmsgid": appattach.findtext("overwrite_newmsgid") or "",
+        }
+    except Exception:
+        return {}
+
+
 async def _cdn_download_img(file_id: str, aes_key: str, save_path: str, img_type: int = 2):
     if not file_id or not aes_key:
         return False, "missing file_id/aes_key"
@@ -180,6 +203,26 @@ async def _cdn_download_img(file_id: str, aes_key: str, save_path: str, img_type
             return r.status_code == 200, f"{r.status_code}:{txt}"
     except Exception as e:
         print(f"CDN下载图片失败: {e}")
+        return False, str(e)
+
+
+async def _cdn_download_file(file_id: str, aes_key: str, save_path: str):
+    if not file_id or not aes_key:
+        return False, "missing file_id/aes_key"
+    payload = {
+        "type": 75,
+        "file_id": file_id,
+        "aes_key": aes_key,
+        "save_path": save_path,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(WECHAT_API_URL, json=payload)
+            txt = r.text[:500]
+            print(f"CDN下载文件状态: {r.status_code} {txt}")
+            return r.status_code == 200, f"{r.status_code}:{txt}"
+    except Exception as e:
+        print(f"CDN下载文件失败: {e}")
         return False, str(e)
 
 
@@ -358,6 +401,31 @@ async def rec_msg(data: dict):
                 if PUBLIC_BASE_URL:
                     data["url"] = f"{PUBLIC_BASE_URL.rstrip('/')}/files/{os.path.basename(save_path)}"
                 print(f"CDN图片已保存: {save_path}")
+            else:
+                data["cdn_error"] = detail
+
+    # 尝试处理文件XML -> CDN下载得到本地路径
+    if data.get("msg_type") == 49 and isinstance(data.get("content"), str) and "<appmsg" in data.get("content", ""):
+        meta = _parse_file_xml(data.get("content", ""))
+        file_id = meta.get("cdnattachurl")
+        aes_key = meta.get("aeskey")
+        title = meta.get("title") or "file"
+        ext = meta.get("fileext") or "dat"
+        if file_id and aes_key and not data.get("path"):
+            msg_id = meta.get("overwrite_newmsgid") or data.get("msg_id") or uuid.uuid4().hex
+            filename = f"{msg_id}.{ext}"
+            save_path = os.path.join(IMG_DOWNLOAD_DIR, filename)
+            api_save_path = save_path
+            if WINDOWS_SAVE_DIR:
+                api_save_path = os.path.join(WINDOWS_SAVE_DIR, filename)
+            ok, detail = await _cdn_download_file(file_id, aes_key, api_save_path)
+            if ok and os.path.exists(save_path):
+                data["path"] = save_path
+                data["cdn_file_id"] = file_id
+                data["file_name"] = title
+                if PUBLIC_BASE_URL:
+                    data["url"] = f"{PUBLIC_BASE_URL.rstrip('/')}/files/{os.path.basename(save_path)}"
+                print(f"CDN文件已保存: {save_path}")
             else:
                 data["cdn_error"] = detail
 
