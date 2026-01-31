@@ -12,5 +12,6 @@ services:
       - WECHAT_API_URL=http://192.168.31.109:30001/api
       - PUBLIC_BASE_URL=http://117.72.154.231:9000
       - IMG_DOWNLOAD_DIR=/data/wechat_images
+      - WINDOWS_SAVE_DIR=D:\\wechat_save_file
 
-# 注意：确保 /home/yxj/wechat_project/wechat_images 在宿主机存在并可写
+# 注意：确保 /mnt/d/wechat_save_file 在 WSL 可读写，并且 Windows 侧已创建 D:\wechat_save_file

@@ -17,6 +17,7 @@ app = FastAPI()
 
 WECHAT_API_URL = os.getenv("WECHAT_API_URL", "http://localhost:30001/api")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+WINDOWS_SAVE_DIR = os.getenv("WINDOWS_SAVE_DIR", "")
 
 # 图片下载目录
 IMG_DOWNLOAD_DIR = os.getenv("IMG_DOWNLOAD_DIR", "/tmp/wechat_images")
@@ -347,7 +348,10 @@ async def rec_msg(data: dict):
         if file_id and aes_key and not data.get("path"):
             msg_id = data.get("msg_id") or uuid.uuid4().hex
             save_path = os.path.join(IMG_DOWNLOAD_DIR, f"{msg_id}.jpg")
-            ok, detail = await _cdn_download_img(file_id, aes_key, save_path, img_type=2)
+            api_save_path = save_path
+            if WINDOWS_SAVE_DIR:
+                api_save_path = os.path.join(WINDOWS_SAVE_DIR, f"{msg_id}.jpg")
+            ok, detail = await _cdn_download_img(file_id, aes_key, api_save_path, img_type=2)
             if ok and os.path.exists(save_path):
                 data["path"] = save_path
                 data["cdn_file_id"] = file_id
