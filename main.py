@@ -19,7 +19,7 @@ WECHAT_API_URL = os.getenv("WECHAT_API_URL", "http://localhost:30001/api")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 
 # 图片下载目录
-IMG_DOWNLOAD_DIR = "/tmp/wechat_images"
+IMG_DOWNLOAD_DIR = os.getenv("IMG_DOWNLOAD_DIR", "/tmp/wechat_images")
 os.makedirs(IMG_DOWNLOAD_DIR, exist_ok=True)
 app.mount("/files", StaticFiles(directory=IMG_DOWNLOAD_DIR), name="files")
 

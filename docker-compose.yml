@@ -4,13 +4,13 @@ services:
     container_name: wechat-api
     network_mode: host
     volumes:
-      - wechat_images:/tmp/wechat_images
       - ./main.py:/app/main.py
+      - /home/yxj/wechat_project/wechat_images:/data/wechat_images
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
       - WECHAT_API_URL=http://192.168.31.109:30001/api
       - PUBLIC_BASE_URL=http://117.72.154.231:9000
+      - IMG_DOWNLOAD_DIR=/data/wechat_images
 
-volumes:
-  wechat_images:
+# 注意：确保 /home/yxj/wechat_project/wechat_images 在宿主机存在并可写
