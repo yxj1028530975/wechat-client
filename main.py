@@ -1,5 +1,5 @@
 ﻿from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 import uvicorn
 import httpx
 import os
@@ -10,6 +10,7 @@ import json
 import asyncio
 from typing import Dict, Set
 from datetime import datetime
+import xml.etree.ElementTree as ET
 
 app = FastAPI()
 
@@ -209,6 +210,7 @@ async def read_root():
         "message": "FastAPI 服务正在运行（支持API和WebSocket）",
         "endpoints": {
             "api": "POST /api",
+            "xml": "POST /xml",
             "msg": "POST /msg",
             "websocket": "WS /ws/{client_id}",
             "ws_status": "GET /ws/status"
@@ -217,6 +219,62 @@ async def read_root():
     }
 
 
+@app.post("/xml")
+async def receive_xml(request: Request):
+    """接收原始XML（公众号/回调），解析后广播到WS"""
+    try:
+        raw = await request.body()
+        xml_str = raw.decode("utf-8", errors="ignore").strip()
+        if not xml_str:
+            return PlainTextResponse("empty", status_code=400)
+
+        root = ET.fromstring(xml_str)
+        def _t(tag):
+            el = root.find(tag)
+            return el.text if el is not None else None
+
+        msg_type_text = (_t("MsgType") or "").lower()
+        msg_type_map = {
+            "text": 1,
+            "image": 3,
+            "voice": 34,
+            "video": 43,
+            "shortvideo": 43,
+            "location": 48,
+            "link": 492,
+            "file": 493,
+            "event": 10000,
+        }
+        msg_type = msg_type_map.get(msg_type_text, 49)
+
+        data = {
+            "type": 100,
+            "msg_type": msg_type,
+            "wx_id": _t("FromUserName"),
+            "content": _t("Content"),
+            "sender": _t("FromUserName"),
+            "time_stamp": int(_t("CreateTime") or 0),
+            "is_self_msg": 0,
+            "is_pc_msg": 0,
+            "xml_content": xml_str,
+            "url": _t("PicUrl"),
+            "media_id": _t("MediaId"),
+            "msg_id": _t("MsgId"),
+            "event": _t("Event"),
+            "event_key": _t("EventKey"),
+        }
+
+        if manager.get_connection_count() > 0:
+            await manager.broadcast({
+                "type": "msg_received",
+                "data": data,
+                "timestamp": datetime.now().isoformat()
+            })
+
+        return PlainTextResponse("success")
+    except Exception as e:
+        print(f"XML处理失败: {e}")
+        return PlainTextResponse("error", status_code=500)
 
 
 # 转发目标配置（可根据需要修改，为空则不转发）

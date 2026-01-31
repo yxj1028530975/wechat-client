@@ -10,5 +10,19 @@ services:
     environment:
       - TZ=Asia/Shanghai
 
+  wechat-bridge:
+    build: .
+    container_name: wechat-bridge
+    network_mode: host
+    command: ["python", "bridge_wechat.py"]
+    volumes:
+      - ./bridge_wechat.py:/app/bridge_wechat.py
+      - ./wechat_whitelist.txt:/app/wechat_whitelist.txt
+      - /Users/yxj/.moltbot:/root/.moltbot:ro
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - WECHAT_WHITELIST_FILE=/app/wechat_whitelist.txt
+
 volumes:
   wechat_images:

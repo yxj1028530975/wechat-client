@@ -11,11 +11,13 @@ ENV PYTHONUNBUFFERED=1
 # 复制依赖文件
 COPY requirements.txt .
 
-# 安装依赖（直接在命令中指定镜像源）
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple/ -r requirements.txt
+# 安装依赖
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY main.py .
+COPY bridge_wechat.py .
+COPY wechat_whitelist.txt .
 
 # 创建图片下载目录
 RUN mkdir -p /tmp/wechat_images
