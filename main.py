@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 app = FastAPI()
 
-WECHAT_API_URL = os.getenv("WECHAT_API_URL", "http://192.168.31.109:30001/api")
+WECHAT_API_URL = os.getenv("WECHAT_API_URL", "http://localhost:30001/api")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 
 # 图片下载目录
